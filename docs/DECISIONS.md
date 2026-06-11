@@ -125,16 +125,43 @@ This document is append-only. Past decisions are never edited or deleted — the
 - (+) pgvector's HNSW index handles 10M+ embeddings per tenant.
 - (–) Pure-play vector DBs faster at very large scale; revisit if any single tenant exceeds 50M chunks.
 
+## ADR-007: Folder named `warehouse` instead of `snowflake`
+
+**Date:** 2026-06-11
+**Status:** Accepted
+
+**Context.** The Snowflake connection helper originally lived at `platform_core/snowflake/connection.py`. Python's import system silently failed to resolve `from platform_core.snowflake.connection import ...` because the package directory shadowed the actual `snowflake` (the Snowflake driver) package on the import path. The module loaded as empty — no functions defined, no error raised.
+
+**Decision.** Rename the directory from `platform_core/snowflake/` to `platform_core/warehouse/`. The abstraction is "the warehouse" anyway — if we later add support for BigQuery or Databricks, the folder doesn't need renaming.
+
+**Alternatives considered.**
+- Keep the name and use absolute imports (`from snowflake.connector import ...`): still risks future shadowing for anyone using the package.
+- Rename to `platform_core/sf/`: terse but cryptic.
+
+**Consequences.**
+- (+) No import shadowing.
+- (+) Domain-appropriate naming (warehouse-agnostic abstraction).
+- (–) One-time refactor cost (already paid).
+
+**Lesson.** Never name a Python subpackage after a top-level third-party package. Verify package layout with `python -c "import x; print(x.__file__)"` when imports behave oddly.
+
 ## How to add an ADR
 
 Template:
 
-ADR-N: Short title in present tense
-Date: YYYY-MM-DD
-Status: Proposed | Accepted | Superseded by ADR-M | Deprecated
-Context. What problem? What constraints?
-Decision. What did we decide?
-Alternatives considered. What else? Why not?
-Consequences. Positive and negative effects.
+```
+## ADR-N: Short title in present tense
+
+**Date:** YYYY-MM-DD
+**Status:** Proposed | Accepted | Superseded by ADR-M | Deprecated
+
+**Context.** What problem? What constraints?
+
+**Decision.** What did we decide?
+
+**Alternatives considered.** What else? Why not?
+
+**Consequences.** Positive and negative effects.
+```
 
 Number ADRs sequentially. Never delete or rewrite a past ADR — supersede it with a new one if direction changes.
