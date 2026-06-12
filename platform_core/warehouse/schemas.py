@@ -8,9 +8,11 @@ Each tenant's data is organized into the standard medallion layers:
     mart -> analytics-ready facts and dimensions
 
 Schemas are named ``<LAYER>_<TENANT>`` within a single Snowflake database,
-e.g. ``RAW_DEL_MAR_DERM``. Keeping all layers in one database (rather than a
-database per tenant) keeps cross-layer dbt refs and grants simple at this scale;
-tenant isolation comes from the schema split plus row access policies.
+e.g. ``RAW_DEL_MAR``. The vertical is already implied by the database name
+(``DERMIQ_DEV`` / ``DERMIQ_PROD``), so the tenant id carries only the clinic,
+not the vertical. Keeping all layers in one database (rather than a database per
+tenant) keeps cross-layer dbt refs and grants simple at this scale; tenant
+isolation comes from the schema split plus row access policies.
 
 This naming convention is the single source of truth for where data lives, so
 both ingestion (Python) and transformation (dbt) derive schema names from
@@ -32,8 +34,8 @@ LAYERS: tuple[str, ...] = ("raw", "stg", "int", "mart")
 def schema_name(layer: str, tenant_id: str) -> str:
     """Return the Snowflake schema name for a (layer, tenant) pair.
 
-    >>> schema_name("raw", "del_mar_derm")
-    'RAW_DEL_MAR_DERM'
+    >>> schema_name("raw", "del_mar")
+    'RAW_DEL_MAR'
     """
     layer = layer.lower()
     if layer not in LAYERS:

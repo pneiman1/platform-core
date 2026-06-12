@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # === Default tenant context for local development ===
     # In production, tenant_id is set per-request from the JWT.
     # For local dev, this default lets scripts run without manual setup.
-    default_tenant_id: str = "del_mar_derm"
+    default_tenant_id: str = "del_mar"
 
 
 @lru_cache

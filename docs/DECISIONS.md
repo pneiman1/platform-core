@@ -145,6 +145,42 @@ This document is append-only. Past decisions are never edited or deleted — the
 
 **Lesson.** Never name a Python subpackage after a top-level third-party package. Verify package layout with `python -c "import x; print(x.__file__)"` when imports behave oddly.
 
+## ADR-008: Medallion schema naming — `<LAYER>_<TENANT>` in a per-vertical database
+
+**Date:** 2026-06-12
+**Status:** Accepted
+
+**Context.** Each tenant's warehouse data is organized into medallion layers
+(raw/stg/int/mart). We need a naming scheme that is unambiguous across tenants and
+layers, simple for dbt refs and grants, and free of redundant tokens. An early
+draft folded the vertical into the tenant id (e.g. `del_mar_derm`), producing
+schemas like `RAW_DEL_MAR_DERM`.
+
+**Decision.** Name schemas `<LAYER>_<TENANT>` within a single per-vertical
+Snowflake database. The database already names the vertical (`DERMIQ_DEV` /
+`DERMIQ_PROD`), so the tenant id carries only the clinic, not the vertical:
+tenant `del_mar` → `RAW_DEL_MAR`, `STG_DEL_MAR`, `INT_DEL_MAR`, `MART_DEL_MAR`.
+The convention is implemented once in
+`platform_core.warehouse.schemas.schema_name()`; both ingestion (Python) and
+transformation (dbt) derive names from it rather than hard-coding strings.
+
+**Alternatives considered.**
+- `<LAYER>_<VERTICAL>_<TENANT>` (e.g. `RAW_DEL_MAR_DERM`): redundant — the
+  vertical is already the database name.
+- Database per tenant (`DERMIQ_DEV_DEL_MAR` with RAW/STG/… schemas): stronger
+  isolation but complicates cross-layer dbt refs and grants at this scale.
+  Revisit if tenant count or compliance needs grow.
+- `<TENANT>_<LAYER>`: groups by tenant first; rejected because layer-first keeps
+  all raw/stg/etc. schemas adjacent, friendlier for dbt target config and ops.
+
+**Consequences.**
+- (+) Short, unambiguous names; no redundant vertical token.
+- (+) Single source of truth (`schema_name()`); naming changes are one line.
+- (+) Layer-first grouping reads well in the Snowflake UI and dbt.
+- (–) Tenant isolation rests on schema separation + row access policies, not
+  database boundaries; acceptable now, revisit per the per-tenant-database
+  alternative if needed.
+
 ## How to add an ADR
 
 Template:

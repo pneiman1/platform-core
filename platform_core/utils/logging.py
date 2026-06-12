@@ -9,10 +9,10 @@ Usage:
 
     configure_logging()  # call once at process startup
     log = get_logger(__name__)
-    log.info("seed_started", tenant_id="del_mar_derm", n_patients=3500)
+    log.info("seed_started", tenant_id="del_mar", n_patients=3500)
 
 Produces a single JSON line:
-    {"event": "seed_started", "tenant_id": "del_mar_derm", "n_patients": 3500,
+    {"event": "seed_started", "tenant_id": "del_mar", "n_patients": 3500,
      "logger": "scripts.seed_data", "level": "info",
      "timestamp": "2026-06-07T15:42:18.123456Z"}
 """
