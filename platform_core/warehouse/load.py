@@ -49,6 +49,9 @@ def load_dataframe(
         schema=schema,
         auto_create_table=True,
         overwrite=overwrite,
+        # Map tz-aware datetimes to Snowflake TIMESTAMP_TZ (preserving timezone)
+        # instead of the legacy path that silently drops tz info / can shift times.
+        use_logical_type=True,
     )
     if not success:
         raise RuntimeError(f"write_pandas failed for {db}.{schema}.{table}")
