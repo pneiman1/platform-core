@@ -26,13 +26,19 @@ def load_dataframe(
     schema: str,
     database: str | None = None,
     overwrite: bool = True,
+    auto_create_table: bool = True,
 ) -> int:
-    """Write ``df`` into ``<database>.<schema>.<table>``, creating it if needed.
+    """Write ``df`` into ``<database>.<schema>.<table>``.
 
-    Column names are uppercased before load. The target table is auto-created to
-    match the DataFrame; with ``overwrite=True`` (the default) it is replaced
-    each run — full-refresh semantics appropriate for raw ingestion. Returns the
-    number of rows written.
+    Column names are uppercased before load. By default the target table is
+    auto-created to match the DataFrame, and with ``overwrite=True`` it is
+    replaced each run — full-refresh semantics appropriate for raw ingestion.
+
+    Set ``auto_create_table=False`` to load into a table that already exists with
+    a known schema (e.g. one created from an explicit column-type map). Combined
+    with ``overwrite=False`` this appends into the pre-created table without
+    letting pandas dtype inference dictate the column types. Returns the number
+    of rows written.
     """
     db = database or get_settings().snowflake_database
     table = table.upper()
@@ -47,7 +53,7 @@ def load_dataframe(
         table_name=table,
         database=db,
         schema=schema,
-        auto_create_table=True,
+        auto_create_table=auto_create_table,
         overwrite=overwrite,
         # Map tz-aware datetimes to Snowflake TIMESTAMP_TZ (preserving timezone)
         # instead of the legacy path that silently drops tz info / can shift times.
