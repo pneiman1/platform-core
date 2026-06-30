@@ -29,11 +29,16 @@ platform-core/
 └── pyproject.toml              Python package metadata + dependencies
 ```
 
+## Supported platforms
+
+macOS (Intel & Apple Silicon), Linux, and Windows via WSL2. See
+[`docs/SETUP.md`](docs/SETUP.md) for per-platform setup steps.
+
 ## Getting started
 
 See [`docs/SETUP.md`](docs/SETUP.md) for the full step-by-step from a fresh machine.
 
-Quick version (if you already have WSL2 + Python 3.11+ + git):
+Quick version (if you already have Python 3.12 + git, on macOS or Linux/WSL2):
 
 ```bash
 git clone git@github.com:pneiman1/platform-core.git

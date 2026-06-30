@@ -1,167 +1,143 @@
-# Architecture Decision Log
+# platform-core — Setup from scratch
 
-A running log of significant architectural decisions made during platform-core development.
+This guide takes a **fresh machine** to a working platform-core development
+environment with a verified Snowflake connection. platform-core is the shared
+library every vertical (DermIQ, etc.) installs in editable mode, so set it up
+**first**, then the vertical repo (see `dermiq/docs/SETUP.md`).
 
-This document is append-only. Past decisions are never edited or deleted — they are superseded by new entries if direction changes.
+**Supported platforms:** macOS (Intel & Apple Silicon), Linux, and Windows via
+WSL2. Steps are identical across platforms except where a callout marks them
+**macOS** vs **Linux / WSL2**.
 
-## ADR-001: Two-repo architecture (platform-core + per-vertical packages)
+> WSL2 note: run everything inside your WSL2 Linux distribution (Ubuntu), not
+> PowerShell. The Linux / WSL2 commands below apply.
 
-**Date:** 2026-06-06
-**Status:** Accepted
+---
 
-**Context.** The roadmap calls for multiple vertical analytics SaaS offerings (DermIQ for cosmetic dermatology, BrewIQ for breweries, FitIQ for gyms). Each vertical shares ~80% of its infrastructure but differs in data models, KPIs, branding, and customer copy.
+## 1. Install the toolchain
 
-**Decision.** Split the codebase into two types of repository:
-- `platform-core` — a versioned Python library containing all shared infrastructure
-- One repository per vertical — depending on a specific pinned version of platform-core
+You need: **Python 3.12**, **git**, **AWS CLI**, the **Astronomer CLI** (`astro`,
+for Airflow later), and **Docker Desktop**.
 
-**Alternatives considered.**
-- Mono-repo: easier to refactor across boundaries; harder to release verticals independently. Overkill for a solo founder.
-- Copy-paste-and-diverge: fastest to start, exponential maintenance cost.
+### Python 3.12
 
-**Consequences.**
-- (+) Each vertical can pin to a known-good platform-core version and upgrade on its own schedule.
-- (+) Bug fixes in platform-core land in every vertical with a one-line version bump.
-- (+) Each vertical has its own commit history, issues, stars, and marketing story.
-- (+) Future open-sourcing of platform-core is possible without exposing vertical-specific code.
-- (–) Cross-cutting refactors require coordinated changes in multiple repos.
-
-## ADR-002: Snowflake as the data warehouse
-
-**Date:** 2026-06-06
-**Status:** Accepted
-
-**Context.** Need a cloud data warehouse for per-tenant clinic data, dbt transformations, and analytical queries.
-
-**Decision.** Use Snowflake.
-
-**Alternatives considered.**
-- BigQuery: comparable performance, but Snowflake's HIPAA tier is operationally simpler.
-- Databricks SQL: better for Spark-heavy workloads; ours is SQL + dbt + light Python.
-- Postgres / Redshift: cheaper at small scale but operationally heavy as tenant count grows.
-
-**Consequences.**
-- (+) Standard tier is cheap for dev (auto-suspend after 60s).
-- (+) Business Critical tier covers HIPAA when needed.
-- (+) Per-tenant schemas + row access policies provide tenant isolation.
-- (–) Annual contract minimums after free trial.
-- (–) Some Snowflake-specific lock-in.
-
-## ADR-003: dbt Core for transformations
-
-**Date:** 2026-06-06
-**Status:** Accepted
-
-**Context.** Raw EMR data needs heavy transformation: deduplication, joins, derived metrics, slowly-changing dimensions. Needs to be testable, documentable, version-controlled.
-
-**Decision.** Use dbt Core (open source). Each vertical owns its own dbt project; shared macros live in platform-core.
-
-**Alternatives considered.**
-- dbt Cloud: managed dbt + IDE + scheduler. Worth it for teams with analyst onboarding; redundant since we orchestrate with Airflow.
-- Custom Python ETL: faster to start, loses testing/documentation/lineage benefits.
-- Snowflake stored procedures: powerful but unportable and hard to test.
-
-**Consequences.**
-- (+) Free.
-- (+) Strong ecosystem (dbt-snowflake, dbt-utils).
-- (+) Generated documentation is a sales artifact.
-- (+) Native data testing primitives.
-
-## ADR-004: Airflow for orchestration
-
-**Date:** 2026-06-06
-**Status:** Accepted
-
-**Context.** Need scheduled execution of nightly ingestion, dbt builds, ML retraining, and weekly brief generation, with retries, dependencies, observability, and per-tenant parameterization.
-
-**Decision.** Apache Airflow, running locally via Astronomer's `astro` CLI in dev; self-hosted on EC2 in production until ops bandwidth justifies managed Astronomer or MWAA.
-
-**Alternatives considered.**
-- Dagster: strong asset-based model, but Airflow has broader market recognition.
-- Prefect: modern and Pythonic but less mature operator ecosystem.
-- Cron + bash: cheap but loses retries, observability, parameterization.
-
-**Consequences.**
-- (+) Massive operator ecosystem.
-- (+) Astronomer's `astro dev start` makes local development one command.
-- (+) Well-known to clinic IT teams' existing ops culture.
-- (–) Configuration sprawl requires discipline.
-
-## ADR-005: Anthropic API directly (not Bedrock) during development
-
-**Date:** 2026-06-06
-**Status:** Accepted for dev; revisit for production with PHI
-
-**Context.** RAG chatbot and weekly brief both call Claude.
-
-**Decision.** Use the Anthropic API directly during development. Make the LLM client a thin abstraction so we can switch to Bedrock via config flag without touching business logic.
-
-**Alternatives considered.**
-- AWS Bedrock from day one: operationally cleaner for HIPAA. Rejected only because it requires AWS setup not needed for demo phase.
-- OpenAI: comparable quality; rejected because Claude's long-context analytical reasoning is a differentiator.
-
-**Consequences.**
-- (+) Zero AWS dependency for local development.
-- (+) Faster iteration.
-- (–) Must switch to Bedrock (or sign direct Anthropic BAA) before real PHI.
-
-## ADR-006: pgvector for the RAG vector store
-
-**Date:** 2026-06-06
-**Status:** Accepted
-
-**Context.** RAG pipeline needs a vector store for embeddings of clinical notes, treatment plans, and SOPs.
-
-**Decision.** Postgres with `pgvector` extension. Same database stores application metadata (users, tenants, chat history).
-
-**Alternatives considered.**
-- Pinecone: managed, scales effortlessly. Rejected because of extra vendor BAA, $70/mo+ minimum, separate-service round trips.
-- Weaviate / Qdrant / Chroma: dedicated vector DBs that add ops overhead with no benefit at our scale.
-- OpenSearch: strong hybrid search but overkill until millions of documents.
-
-**Consequences.**
-- (+) Single database to back up, monitor, secure.
-- (+) Joins between vector results and structured metadata happen in SQL.
-- (+) pgvector's HNSW index handles 10M+ embeddings per tenant.
-- (–) Pure-play vector DBs faster at very large scale; revisit if any single tenant exceeds 50M chunks.
-
-## ADR-007: Folder named `warehouse` instead of `snowflake`
-
-**Date:** 2026-06-11
-**Status:** Accepted
-
-**Context.** The Snowflake connection helper originally lived at `platform_core/snowflake/connection.py`. Python's import system silently failed to resolve `from platform_core.snowflake.connection import ...` because the package directory shadowed the actual `snowflake` (the Snowflake driver) package on the import path. The module loaded as empty — no functions defined, no error raised.
-
-**Decision.** Rename the directory from `platform_core/snowflake/` to `platform_core/warehouse/`. The abstraction is "the warehouse" anyway — if we later add support for BigQuery or Databricks, the folder doesn't need renaming.
-
-**Alternatives considered.**
-- Keep the name and use absolute imports (`from snowflake.connector import ...`): still risks future shadowing for anyone using the package.
-- Rename to `platform_core/sf/`: terse but cryptic.
-
-**Consequences.**
-- (+) No import shadowing.
-- (+) Domain-appropriate naming (warehouse-agnostic abstraction).
-- (–) One-time refactor cost (already paid).
-
-**Lesson.** Never name a Python subpackage after a top-level third-party package. Verify package layout with `python -c "import x; print(x.__file__)"` when imports behave oddly.
-
-## How to add an ADR
-
-Template:
-
+**macOS**
+```bash
+brew install python@3.12
+python3.12 --version
 ```
-## ADR-N: Short title in present tense
+> Homebrew's Python can shadow the system Python — always invoke `python3.12`
+> explicitly (or use `pyenv`). See [MACOS-NOTES](../../dermiq/docs/MACOS-NOTES.md)
+> in the dermiq repo for the conflict details.
 
-**Date:** YYYY-MM-DD
-**Status:** Proposed | Accepted | Superseded by ADR-M | Deprecated
-
-**Context.** What problem? What constraints?
-
-**Decision.** What did we decide?
-
-**Alternatives considered.** What else? Why not?
-
-**Consequences.** Positive and negative effects.
+**Linux / WSL2**
+```bash
+sudo apt update
+sudo apt install -y python3.12 python3.12-venv python3-pip
+python3.12 --version
 ```
 
-Number ADRs sequentially. Never delete or rewrite a past ADR — supersede it with a new one if direction changes.
+### git, AWS CLI, Astronomer CLI
+
+**macOS** (Homebrew formula names differ from apt — note `awscli`, not `aws-cli`):
+```bash
+brew install git awscli
+brew install astro          # Astronomer CLI
+```
+
+**Linux / WSL2**
+```bash
+sudo apt install -y git
+sudo apt install -y awscli                     # or the official bundle installer
+curl -sSL https://install.astronomer.io | sudo bash -s   # Astronomer CLI
+```
+
+### Docker Desktop
+
+- **macOS:** download Docker Desktop from docker.com and install the `.dmg`.
+  On Apple Silicon it runs natively (arm64).
+- **Linux / WSL2:** install Docker Desktop for Windows and enable **Settings →
+  Resources → WSL Integration** for your distro. (Docker Engine in-distro works
+  too.) Verify with `docker run hello-world`.
+
+---
+
+## 2. Configure git identity + SSH (identical on every platform)
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+
+# Create an SSH key if you don't have one, then add the public key to GitHub.
+ssh-keygen -t ed25519 -C "you@example.com"
+cat ~/.ssh/id_ed25519.pub        # paste into GitHub → Settings → SSH keys
+ssh -T git@github.com            # should greet you by username
+```
+
+---
+
+## 3. Clone platform-core and create a virtualenv
+
+Clone both repos as **siblings** under `~/projects` (the vertical's editable
+install relies on the relative path `../platform-core`):
+
+```
+~/projects/
+├── platform-core/      ← this repo
+└── dermiq/             ← set up next, see dermiq/docs/SETUP.md
+```
+
+```bash
+mkdir -p ~/projects && cd ~/projects
+git clone git@github.com:pneiman1/platform-core.git
+cd platform-core
+
+python3.12 -m venv .venv
+source .venv/bin/activate        # macOS & Linux/WSL2 (bash/zsh)
+```
+
+## 4. Install the library
+
+```bash
+pip install --upgrade pip
+pip install -e ".[all]"          # library + all optional toolchains
+```
+
+## 5. Configure Snowflake credentials
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in at least:
+
+```
+SNOWFLAKE_ACCOUNT=<orglocator>-<accountname>
+SNOWFLAKE_USER=...
+SNOWFLAKE_PASSWORD=...
+SNOWFLAKE_ROLE=ACCOUNTADMIN
+SNOWFLAKE_WAREHOUSE=COMPUTE_WH
+SNOWFLAKE_DATABASE=DERMIQ_DEV
+```
+
+## 6. Verify the connection
+
+```bash
+python -c "from platform_core.warehouse.connection import test_connection; print(test_connection())"
+```
+
+A dict with your Snowflake version/account/user/role/warehouse means everything
+is wired correctly. You're ready to set up the vertical — continue in
+`dermiq/docs/SETUP.md`.
+
+---
+
+## Troubleshooting
+
+- **`ModuleNotFoundError: platform_core`** — the venv isn't active, or the editable
+  install didn't run. Re-activate `.venv` and re-run step 4.
+- **Snowflake auth/connection errors** — re-check the `SNOWFLAKE_*` values in `.env`;
+  `SNOWFLAKE_ACCOUNT` is `<orglocator>-<accountname>`.
+- **Apple Silicon:** the Snowflake Python connector ships arm64 wheels — confirm
+  your interpreter is native with `python -c "import platform; print(platform.machine())"`
+  (should print `arm64`).
