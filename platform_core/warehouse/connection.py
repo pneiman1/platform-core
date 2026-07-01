@@ -41,7 +41,10 @@ def get_snowflake_connection(
         warehouse=settings.snowflake_warehouse,
         database=database if database is not None else settings.snowflake_database,
         schema=schema,
-        client_session_keep_alive=False,
+        # Heartbeat auto-refreshes the session token so long-lived connections
+        # (e.g. the FastAPI app's single app.state connection) don't expire
+        # overnight. Harmless for short-lived scripts. See dermiq docs/API.md.
+        client_session_keep_alive=True,
     )
 
     try:
