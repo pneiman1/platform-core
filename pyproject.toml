@@ -21,6 +21,9 @@ dependencies = [
     "snowflake-connector-python>=3.7",
     "snowflake-sqlalchemy>=1.5",
     "sqlalchemy>=2.0",
+    # Direct import: warehouse.connection loads the keypair-auth private key.
+    # Also a snowflake-connector-python dep, but we import it ourselves.
+    "cryptography>=42.0",
 
     # Application database
     "psycopg2-binary>=2.9",

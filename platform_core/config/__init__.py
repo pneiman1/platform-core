@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # === Snowflake ===
     snowflake_account: str = ""
     snowflake_user: str = ""
+    # Keypair auth (preferred). Snowflake enforces MFA on password auth, which
+    # cannot complete headless — the initial auth needs a fresh TOTP code even
+    # with MFA caching enabled. When snowflake_private_key_path is set, the
+    # connection uses authenticator='SNOWFLAKE_JWT'. See dermiq ADR-009.
+    snowflake_private_key_path: str = ""
+    snowflake_private_key_passphrase: str = ""
+    # Password auth remains as a fallback for accounts without MFA enforcement.
     snowflake_password: str = ""
     snowflake_role: str = "ACCOUNTADMIN"
     snowflake_warehouse: str = "COMPUTE_WH"
