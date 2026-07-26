@@ -1,82 +1,84 @@
 # platform-core
 
-Shared infrastructure for vertical analytics products (DermIQ, BrewIQ, FitIQ, etc.).
+platform-core is a reusable data-platform toolkit — the primitives that vertical
+analytics SaaS products share, so each vertical only has to build its own domain
+models, dashboards, and branding. It provides configuration, a Snowflake
+connection helper, a RAG toolkit, and an LLM client. It is a **Python library, not
+a deployable app**: verticals import from it and add their own dbt models, Airflow
+DAGs, seed data, and UI.
 
-This repo is a Python library + reusable assets — **not** a deployable application on its own. Each vertical product (e.g., [DermIQ](https://github.com/pneiman1/dermiq)) imports from this library and adds vertical-specific dbt models, Airflow DAGs, seed data, and branding.
+First (and current) consumer: [DermIQ](https://github.com/pneiman1/dermiq), analytics
+for cosmetic dermatology practices. The design is tenant-agnostic so additional
+verticals (BrewIQ, FitIQ, …) can reuse the same core.
 
-## What's inside
+## What lives here
 
 ```
-platform-core/
-├── platform_core/              the Python package
-│   ├── __init__.py             package marker, __version__
-│   ├── config/
-│   │   └── __init__.py         Pydantic Settings, .env loading
-│   ├── utils/
-│   │   ├── __init__.py
-│   │   └── logging.py          structlog-based JSON logging
-│   └── warehouse/
-│       ├── __init__.py
-│       └── connection.py       Snowflake connection helper
-├── scripts/
-│   └── hello_snowflake.py      end-to-end Snowflake smoke test
-├── docs/
-│   ├── SETUP.md                full setup-from-scratch guide
-│   └── DECISIONS.md            architecture decision log
-├── .env.example                template for secrets (real .env is gitignored)
-├── .gitignore
-├── README.md                   you are here
-└── pyproject.toml              Python package metadata + dependencies
+platform_core/
+├── config/       Pydantic Settings — one env-driven Settings object (.env → typed config)
+├── warehouse/    Snowflake connection helper (key-pair JWT or password) + schema naming
+├── llm/          Anthropic Claude client (single-turn completion)          [see note]
+├── rag/          RAG toolkit: embedder, document/store interface, corpus write/read [see note]
+└── utils/        structlog-based JSON logging
 ```
 
-## Supported platforms
+> **Note:** `llm/` and `rag/` arrived with DermIQ's RAG feature (chunk-10) and are
+> present in the working tree but **not yet committed to `main`** in this repo.
+> `config/`, `warehouse/`, and `utils/` are committed.
 
-macOS (Intel & Apple Silicon), Linux, and Windows via WSL2. See
-[`docs/SETUP.md`](docs/SETUP.md) for per-platform setup steps.
+Ingestion utilities are **not** here — landing a source into the warehouse is
+vertical-specific (schemas, types, source shape), so DermIQ owns
+`dermiq/ingestion/`. platform-core provides the connection + schema-naming
+primitives it builds on.
 
-## Getting started
+## Design principles
 
-See [`docs/SETUP.md`](docs/SETUP.md) for the full step-by-step from a fresh machine.
+- **Tenant-agnostic.** No vertical or tenant is hard-coded. Schema names derive
+  from `(layer, tenant)`; the connection and config carry no domain knowledge.
+- **Env-driven config.** Everything flows through one `Settings` object read from
+  environment / `.env` (`platform_core.config.get_settings`). In production the
+  same vars come from a secrets manager.
+- **Key-pair-first Snowflake auth.** The connection helper prefers key-pair (JWT)
+  auth and falls back to password. Snowflake enforces MFA, which password auth
+  can't satisfy headless — key-pair is the default for all unattended access.
+- **Cross-platform.** macOS (Intel & Apple Silicon), Linux, and Windows/WSL2.
 
-Quick version (if you already have Python 3.12 + git, on macOS or Linux/WSL2):
+## How DermIQ consumes it
+
+- **Editable install.** DermIQ installs platform-core editable (`pip install -e`)
+  from a sibling checkout, so changes to the core are picked up immediately.
+- **Shared config surface.** Both repos read the same env var names, so one `.env`
+  convention drives platform-core's `Settings`, DermIQ's ingestion, and dbt's
+  `profiles.yml` (all pointed at the same Snowflake account/warehouse via key-pair).
+- **Imports, not forks.** DermIQ calls `platform_core.config`,
+  `platform_core.warehouse.connection`, `platform_core.rag`, `platform_core.llm`.
+
+## Getting started (using platform-core in a new vertical)
 
 ```bash
 git clone git@github.com:pneiman1/platform-core.git
 cd platform-core
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
 cp .env.example .env
-# Edit .env: fill in SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PASSWORD
-python scripts/hello_snowflake.py
+# Fill in SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, and either
+#   SNOWFLAKE_PRIVATE_KEY_PATH + SNOWFLAKE_PRIVATE_KEY_PASSPHRASE  (preferred), or
+#   SNOWFLAKE_PASSWORD                                             (non-MFA fallback)
+python scripts/hello_snowflake.py    # smoke-test laptop → Python → Snowflake
 ```
 
-If the script prints "Snowflake says hello," everything is wired correctly.
+In a new vertical package, install platform-core editable alongside it and import:
 
-## What's working today
+```python
+from platform_core.config import get_settings
+from platform_core.warehouse.connection import get_snowflake_connection
+from platform_core.warehouse.schemas import schema_name   # -> "<LAYER>_<TENANT>"
+```
 
-- ✅ Pydantic Settings configuration from environment variables / `.env`
-- ✅ Structured JSON logging via structlog
-- ✅ Snowflake connection helper (context-managed, auto-closes)
-- ✅ End-to-end verified: laptop → Python → Snowflake → result
-
-## What's coming next
-
-- Snowflake schema provisioning helpers (per-tenant `raw_`, `stg_`, `int_`, `mart_` schemas)
-- Reusable dbt macros (tokenization, PHI helpers, tenant filtering)
-- ML libraries (clustering, classification, forecasting, LTV regression)
-- RAG pipeline (chunking, embedding, retrieval, generation, guardrails)
-- FastAPI scaffolding (auth, audit, tenant routing)
-- Airflow custom operators
-
-## Architecture decisions
-
-See [`docs/DECISIONS.md`](docs/DECISIONS.md) for the running log of architectural decisions and the reasoning behind each.
+Supported platforms and full setup: [`docs/SETUP.md`](docs/SETUP.md).
+Architecture decisions: [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Status
 
-Early development. Not yet versioned for external consumers.
-
-## License
-
-Proprietary. All rights reserved.
+Early development; not yet versioned for external consumers. Proprietary — all
+rights reserved.
