@@ -52,7 +52,9 @@ class Settings(BaseSettings):
     # 'bedrock' uses AWS Bedrock (required for HIPAA + AWS BAA)
     llm_provider: Literal["anthropic", "bedrock"] = "anthropic"
     anthropic_api_key: str = ""
-    anthropic_model_sonnet: str = "claude-sonnet-4-5-20250929"
+    # Verified available + stable on the account 2026-07 (chunk-10); Sonnet-line
+    # pricing has held constant across versions. See DECISIONS.md ADR-008.
+    anthropic_model_sonnet: str = "claude-sonnet-5"
     anthropic_model_haiku: str = "claude-haiku-4-5-20251001"
     bedrock_region: str = "us-west-2"
     bedrock_model_id_sonnet: str = "anthropic.claude-sonnet-4-5-20250929-v1:0"

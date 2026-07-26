@@ -17,14 +17,12 @@ verticals (BrewIQ, FitIQ, …) can reuse the same core.
 platform_core/
 ├── config/       Pydantic Settings — one env-driven Settings object (.env → typed config)
 ├── warehouse/    Snowflake connection helper (key-pair JWT or password) + schema naming
-├── llm/          Anthropic Claude client (single-turn completion)          [see note]
-├── rag/          RAG toolkit: embedder, document/store interface, corpus write/read [see note]
+├── llm/          Anthropic Claude client (single-turn completion)
+├── rag/          RAG toolkit: embedder, document/store interface, corpus write/read
 └── utils/        structlog-based JSON logging
 ```
 
-> **Note:** `llm/` and `rag/` arrived with DermIQ's RAG feature (chunk-10) and are
-> present in the working tree but **not yet committed to `main`** in this repo.
-> `config/`, `warehouse/`, and `utils/` are committed.
+`llm/` and `rag/` arrived with DermIQ's RAG feature (chunk-10).
 
 Ingestion utilities are **not** here — landing a source into the warehouse is
 vertical-specific (schemas, types, source shape), so DermIQ owns
