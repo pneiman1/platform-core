@@ -109,15 +109,38 @@ pip install -e ".[all]"          # library + all optional toolchains
 cp .env.example .env
 ```
 
+**Auth is key-pair (JWT), not password.** Snowflake enforces MFA, which password
+auth can't satisfy headless, so the connection helper uses key-pair auth by default
+(password is a legacy fallback for non-MFA accounts). Generate a key-pair once and
+register the public key on your user:
+
+```bash
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -outform PEM \
+  -out ~/.ssh/snowflake_rsa_key.p8 -passout pass:<passphrase>
+openssl rsa -in ~/.ssh/snowflake_rsa_key.p8 -passin pass:<passphrase> \
+  -pubout -out ~/.ssh/snowflake_rsa_key.pub
+chmod 600 ~/.ssh/snowflake_rsa_key.p8
+# In Snowsight: ALTER USER <you> SET RSA_PUBLIC_KEY='<public key body, no headers>';
+```
+
 Edit `.env` and fill in at least:
 
 ```
 SNOWFLAKE_ACCOUNT=<orglocator>-<accountname>
 SNOWFLAKE_USER=...
-SNOWFLAKE_PASSWORD=...
+SNOWFLAKE_PRIVATE_KEY_PATH=~/.ssh/snowflake_rsa_key.p8
+SNOWFLAKE_PRIVATE_KEY_PASSPHRASE=<passphrase>
 SNOWFLAKE_ROLE=ACCOUNTADMIN
 SNOWFLAKE_WAREHOUSE=COMPUTE_WH
 SNOWFLAKE_DATABASE=DERMIQ_DEV
+# SNOWFLAKE_PASSWORD= only if the account doesn't enforce MFA (legacy fallback)
+```
+
+Verticals that use the LLM/RAG toolkit (e.g. DermIQ's AI Studio + Canvas) also read
+an Anthropic key from this same `.env`; add it here so both repos share it:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...   # console.anthropic.com; requires a $10 prepaid minimum
 ```
 
 ## 6. Verify the connection
