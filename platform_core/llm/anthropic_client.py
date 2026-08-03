@@ -11,6 +11,9 @@ from platform_core.utils.logging import get_logger
 
 log = get_logger(__name__)
 
+# Timeout for Anthropic API calls (seconds)
+ANTHROPIC_TIMEOUT = 30.0
+
 
 class LLMConfigError(RuntimeError):
     """Raised when the LLM provider isn't usable (missing key / unsupported provider)."""
@@ -57,6 +60,7 @@ class LLMClient:
             max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
+            timeout=ANTHROPIC_TIMEOUT,
         )
         if temperature is not None:
             kwargs["temperature"] = temperature

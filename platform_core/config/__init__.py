@@ -85,6 +85,15 @@ class Settings(BaseSettings):
     # For local dev, this default lets scripts run without manual setup.
     default_tenant_id: str = "del_mar"
 
+    # === API CORS ===
+    # Comma-separated list of allowed origins. Falls back to localhost for dev.
+    cors_origins: str = "http://localhost:3000"
+
+    # === Cost controls ===
+    # Monthly budget cap for Anthropic API calls (USD). Set to 0 to disable.
+    # Estimated from Sonnet 5 pricing: $3/M input, $15/M output tokens.
+    anthropic_monthly_budget_usd: float = 20.0
+
 
 @lru_cache
 def get_settings() -> Settings:
